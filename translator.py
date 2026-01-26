@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup  # Added for parsing EPUB HTML content
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Set up API key and language (default)
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("GEMINI_API_KEY")
 LANGUAGE = "deutsch"  # Default language, can be overridden by user input
 
 
@@ -33,21 +33,44 @@ def configure_genai():
     return GenerativeModel(model_name)
 
 
-def get_translation_with_genai(model, content):
+def get_translation_with_genai(model, content, max_retries=3):
     """
     Uses the Generative AI model to perform translations.
     Returns the translation and the character counts for input and output.
+    Retries on rate limit errors (429).
     """
-    logging.info("Generating %s translation with Google Gemini API.",LANGUAGE)
-    try:
-        # Use the global LANGUAGE variable, which is updated by user input
-        response = model.generate_content(f"Translate the following text to {LANGUAGE}: {content}")
-        response_text = response.text
-        logging.info("Translation received: %s", response_text)
-        return response_text, len(content), len(response_text)
-    except Exception as e:
-        logging.error("Error during translation: %s", e)
-        return "Error in translation.", len(content), 0
+    logging.info("Generating %s translation with Google Gemini API.", LANGUAGE)
+
+    for attempt in range(max_retries):
+        try:
+            # Use the global LANGUAGE variable, which is updated by user input
+            prompt = f"Translate the following content to {LANGUAGE}. Return ONLY the translated text. Do not include any introductory or concluding remarks. Do not include notes.\\n\\nContent:\\n{content}"
+            response = model.generate_content(prompt)
+            response_text = response.text
+            logging.info("Translation received: %s", response_text)
+            return response_text, len(content), len(response_text)
+        except Exception as e:
+            error_str = str(e)
+            if "429" in error_str:
+                # Rate limit error - extract retry delay if possible
+                retry_delay = 60  # Default wait time
+                if "retry in" in error_str.lower():
+                    try:
+                        import re
+                        match = re.search(r'retry in (\d+\.?\d*)', error_str.lower())
+                        if match:
+                            retry_delay = int(float(match.group(1))) + 5  # Add buffer
+                    except:
+                        pass
+                logging.warning("Rate limit hit (attempt %d/%d). Waiting %d seconds...",
+                              attempt + 1, max_retries, retry_delay)
+                time.sleep(retry_delay)
+            else:
+                logging.error("Error during translation: %s", e)
+                return "Error in translation.", len(content), 0
+
+    logging.error("Max retries exceeded for translation.")
+    return "Error in translation.", len(content), 0
 
 
 def find_files(extensions, root_dir='.'):
@@ -191,13 +214,11 @@ def create_target_document_stream(source_file, target_language):
 
 def write_page_to_document(file_stream, item_number, translated_text):
     """Writes a single item's (page/EPUB section) translated text to the target document."""
-    file_stream.write(f"--- Item {item_number} ---\n")  # Changed "Page" to "Item" for generality
-    for line in textwrap.wrap(translated_text, width=80):
-        file_stream.write(line + "\n")
-    file_stream.write("\n")
+    file_stream.write(f"\\n--- Page {item_number} ---\\n\\n")
+    file_stream.write(translated_text.strip() + "\\n")
 
 
-def throttle_request(last_request_time, min_interval=6):  # 6 seconds for ~10 RPM (Gemini Flash free tier limit)
+def throttle_request(last_request_time, min_interval=5):  # 5 seconds = 12 RPM (Free tier: 15 RPM)
     """Ensures a minimum interval between requests."""
     elapsed_time = time.time() - last_request_time
     if elapsed_time < min_interval:
@@ -207,14 +228,32 @@ def throttle_request(last_request_time, min_interval=6):  # 6 seconds for ~10 RP
 
 
 if __name__ == "__main__":
-    # User input for language
-    user_lang_input = input(f"Enter the target language (e.g., 'deutsch' for German, default: '{LANGUAGE}'): ")
-    if user_lang_input.strip():
-        LANGUAGE = user_lang_input.strip().lower()
+    import argparse
+    
+    # Set up command-line argument parsing
+    parser = argparse.ArgumentParser(description='Translate documents using Google Gemini')
+    parser.add_argument('--file', type=str, 
+                      help='Path to a specific file or folder containing PDF/EPUB files to translate')
+    parser.add_argument('--lang', type=str, default=LANGUAGE, 
+                      help=f'Target language (e.g., "deutsch" for German, default: "{LANGUAGE}")')
+    parser.add_argument('--range', type=str, default='',
+                      help='Page/item range (e.g., "1-3", "5", or leave blank for all)')
+    
+    args = parser.parse_args()
+    
+    # Set language from command line or prompt
+    if args.lang != LANGUAGE:
+        LANGUAGE = args.lang.lower()
+    else:
+        user_lang_input = input(f"Enter the target language (e.g., 'deutsch' for German, default: '{LANGUAGE}'): ").strip()
+        if user_lang_input:
+            LANGUAGE = user_lang_input.lower()
     logging.info(f"Target language set to: {LANGUAGE}")
-
-    # User input for page/item range
-    range_input_str = input("Enter the page/item range (e.g., '1-3', '5', or leave blank for all): ")
+    
+    # Set page range from command line or prompt
+    range_input_str = args.range if args.range else input(
+        "Enter the page/item range (e.g., '1-3', '5', or leave blank for all): "
+    )
     start_processing_item, end_processing_item = 1, None  # Default: process all
 
     if "-" in range_input_str:
@@ -235,11 +274,30 @@ if __name__ == "__main__":
         f"Processing range: Start item {start_processing_item}, End item {'All' if end_processing_item is None else end_processing_item}")
 
     supported_extensions = ['.pdf', '.epub']
-    source_files = find_files(supported_extensions)
-
-    if not source_files:
-        logging.warning(f"No PDF or EPUB files found in the current directory with extensions: {supported_extensions}")
+    
+    # If a specific file or folder was provided, use it; otherwise search in current directory
+    if args.file:
+        if os.path.isfile(args.file):
+            # Single file provided
+            if not any(args.file.lower().endswith(ext) for ext in supported_extensions):
+                logging.error(f"Unsupported file type. Please provide a PDF or EPUB file.")
+                exit(1)
+            source_files = [args.file]
+        elif os.path.isdir(args.file):
+            # Directory provided, find all PDF and EPUB files in it
+            source_files = find_files(supported_extensions, args.file)
+            if not source_files:
+                logging.error(f"No PDF or EPUB files found in the specified directory: {args.file}")
+                exit(1)
+        else:
+            logging.error(f"File or directory not found: {args.file}")
+            exit(1)
     else:
+        # No file or folder specified, use current directory
+        source_files = find_files(supported_extensions)
+        if not source_files:
+            logging.warning(f"No PDF or EPUB files found in the current directory with extensions: {supported_extensions}")
+            exit(1)
         model = configure_genai()
         if not model:
             exit(1)  # API key or model configuration failed

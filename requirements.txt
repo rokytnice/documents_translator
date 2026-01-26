@@ -8,3 +8,10 @@ google-generativeai
 
 ebooklib
 beautifulsoup4
+
+# For advanced PDF handling (images, HTML export)
+pymupdf
+
+# For converting Markdown to HTML/PDF
+markdown
+markdown-pdf
