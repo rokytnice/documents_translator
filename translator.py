@@ -215,8 +215,8 @@ def create_target_document_stream(source_file, target_language, output_dir="outp
 
 def write_page_to_document(file_stream, item_number, translated_text):
     """Writes a single item's (page/EPUB section) translated text to the target document."""
-    file_stream.write(f"\\n--- Page {item_number} ---\\n\\n")
-    file_stream.write(translated_text.strip() + "\\n")
+    file_stream.write(f"\n--- Page {item_number} ---\n\n")
+    file_stream.write(translated_text.strip() + "\n")
 
 
 def get_last_translated_page(output_file):
@@ -224,13 +224,10 @@ def get_last_translated_page(output_file):
     if not os.path.exists(output_file):
         return 0
     import re
-    last_page = 0
     with open(output_file, 'r', encoding='utf-8') as f:
-        for line in f:
-            match = re.match(r'^--- Page (\d+) ---', line)
-            if match:
-                last_page = int(match.group(1))
-    return last_page
+        content = f.read()
+    pages = re.findall(r'--- Page (\d+) ---', content)
+    return int(pages[-1]) if pages else 0
 
 
 def throttle_request(last_request_time, min_interval=5):  # 5 seconds = 12 RPM (Free tier: 15 RPM)
