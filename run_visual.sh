@@ -21,5 +21,5 @@ if [ -z "$PDF_FILE" ]; then
     echo "Keine PDF Datei gefunden."
 else
     echo "Verarbeite: $PDF_FILE"
-    python3 visual_translator.py "$PDF_FILE" "deutsch"
+    $VENV_DIR/bin/python src/visual_translator.py "$PDF_FILE" "deutsch"
 fi

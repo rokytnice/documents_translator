@@ -30,4 +30,4 @@ if [ -z "$FILE" ]; then
 fi
 
 echo "Konvertiere Datei: $FILE"
-python3 md_to_pdf.py "$FILE"
+$VENV_DIR/bin/python src/md_to_pdf.py "$FILE"

@@ -19,4 +19,4 @@ fi
 
 # 4. Das Python-Programm starten
 echo "Starte Translator..."
-$VENV_DIR/bin/python translator.py "$@"
+$VENV_DIR/bin/python src/translator.py "$@"
