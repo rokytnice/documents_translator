@@ -219,6 +219,20 @@ def write_page_to_document(file_stream, item_number, translated_text):
     file_stream.write(translated_text.strip() + "\\n")
 
 
+def get_last_translated_page(output_file):
+    """Returns the last successfully translated page number found in output_file, or 0 if none."""
+    if not os.path.exists(output_file):
+        return 0
+    import re
+    last_page = 0
+    with open(output_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            match = re.match(r'^--- Page (\d+) ---', line)
+            if match:
+                last_page = int(match.group(1))
+    return last_page
+
+
 def throttle_request(last_request_time, min_interval=5):  # 5 seconds = 12 RPM (Free tier: 15 RPM)
     """Ensures a minimum interval between requests."""
     elapsed_time = time.time() - last_request_time
@@ -311,39 +325,23 @@ if __name__ == "__main__":
             base_name = os.path.splitext(os.path.basename(source_file))[0]
             target_output_filename = os.path.join("output", f"{base_name}_{LANGUAGE}.txt")
 
-            # Check if target file already exists and ask user if they want to overwrite or skip
-            if os.path.exists(target_output_filename):
-                overwrite_choice = input(
-                    f"Target file '{target_output_filename}' already exists. Overwrite? (y/n/s to skip this file) [n]: ").lower()
-                if overwrite_choice == 's':
-                    logging.info(f"Skipping already processed file: {source_file}")
-                    continue
-                elif overwrite_choice == 'y':
-                    logging.info(f"Overwriting existing target file: {target_output_filename}")
-                    # Delete or truncate the file before opening in append mode if we want a fresh start
-                    # For simplicity, if 'a' is used in create_target_document_stream, new content will be added.
-                    # If 'w' was used, it would be overwritten anyway.
-                    # To truly overwrite with 'a' mode, we'd os.remove() it first.
-                    # Let's ensure a clean slate if overwriting
-                    try:
-                        os.remove(target_output_filename)
-                        logging.info(f"Removed existing file: {target_output_filename} for overwrite.")
-                    except OSError as e:
-                        logging.error(
-                            f"Could not remove existing file {target_output_filename}: {e}. Appending might occur.")
-                # else (n or default): proceed, will append to existing if 'a' mode is kept
+            # Auto-resume: find last translated page and continue from there
+            resume_from = get_last_translated_page(target_output_filename)
+            file_start_item = max(start_processing_item, resume_from + 1)
+            if resume_from > 0:
+                logging.info(f"Resuming '{source_file}' from page {file_start_item} (last completed: {resume_from})")
 
-            last_request_time = 0  # Reset for each file or keep global? Per file seems fine.
+            last_request_time = 0
 
             with create_target_document_stream(source_file, LANGUAGE) as target_stream:
                 page_iterator = None
                 file_type_processed = ""
 
                 if source_file.lower().endswith('.pdf'):
-                    page_iterator = read_pdf_pages(source_file, start_processing_item, end_processing_item)
+                    page_iterator = read_pdf_pages(source_file, file_start_item, end_processing_item)
                     file_type_processed = "PDF"
                 elif source_file.lower().endswith('.epub'):
-                    page_iterator = read_epub_pages(source_file, start_processing_item, end_processing_item)
+                    page_iterator = read_epub_pages(source_file, file_start_item, end_processing_item)
                     file_type_processed = "EPUB"
 
                 if not page_iterator:
