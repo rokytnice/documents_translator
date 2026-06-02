@@ -2,3 +2,4 @@
 .idea
 books/
 output/
+*.progress.json

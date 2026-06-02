@@ -219,15 +219,25 @@ def write_page_to_document(file_stream, item_number, translated_text):
     file_stream.write(translated_text.strip() + "\n")
 
 
-def get_last_translated_page(output_file):
-    """Returns the last successfully translated page number found in output_file, or 0 if none."""
-    if not os.path.exists(output_file):
+def progress_file_path(output_file):
+    return output_file.replace(".txt", ".progress.json")
+
+
+def load_progress(output_file):
+    path = progress_file_path(output_file)
+    if not os.path.exists(path):
         return 0
-    import re
-    with open(output_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-    pages = re.findall(r'--- Page (\d+) ---', content)
-    return int(pages[-1]) if pages else 0
+    import json
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return data.get("last_page", 0)
+
+
+def save_progress(output_file, last_page, total_pages, language):
+    import json
+    path = progress_file_path(output_file)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump({"last_page": last_page, "total_pages": total_pages, "language": language}, f, indent=2)
 
 
 def throttle_request(last_request_time, min_interval=5):  # 5 seconds = 12 RPM (Free tier: 15 RPM)
@@ -322,8 +332,8 @@ if __name__ == "__main__":
             base_name = os.path.splitext(os.path.basename(source_file))[0]
             target_output_filename = os.path.join("output", f"{base_name}_{LANGUAGE}.txt")
 
-            # Auto-resume: find last translated page and continue from there
-            resume_from = get_last_translated_page(target_output_filename)
+            # Auto-resume via progress file
+            resume_from = load_progress(target_output_filename)
             file_start_item = max(start_processing_item, resume_from + 1)
             if resume_from > 0:
                 logging.info(f"Resuming '{source_file}' from page {file_start_item} (last completed: {resume_from})")
@@ -366,6 +376,8 @@ if __name__ == "__main__":
                             item_number, file_type_processed, original_chars, translated_chars
                         )
                         write_page_to_document(target_stream, item_number, translated_text)
+                        target_stream.flush()
+                        save_progress(target_output_filename, item_number, end_processing_item or 0, LANGUAGE)
                         processed_item_count += 1
 
                 if processed_item_count == 0:
