@@ -199,10 +199,11 @@ def read_epub_pages(epub_file, start_item=1, end_item=None):
             continue
 
 
-def create_target_document_stream(source_file, target_language):
+def create_target_document_stream(source_file, target_language, output_dir="output"):
     """Creates a target text document using a write stream and writes pages incrementally."""
-    base, _ = os.path.splitext(source_file)  # Get filename without extension
-    target_file = f"{base}_{target_language}.txt"
+    os.makedirs(output_dir, exist_ok=True)
+    base_name = os.path.splitext(os.path.basename(source_file))[0]
+    target_file = os.path.join(output_dir, f"{base_name}_{target_language}.txt")
     logging.info("Creating target document: %s", target_file)
     # Use 'w' to overwrite if exists, or 'a' to append. 'w' is safer for new runs.
     # If appending is desired for partial runs, change to 'a'.
@@ -275,16 +276,14 @@ if __name__ == "__main__":
 
     supported_extensions = ['.pdf', '.epub']
     
-    # If a specific file or folder was provided, use it; otherwise search in current directory
+    # If a specific file or folder was provided, use it; otherwise default to books/
     if args.file:
         if os.path.isfile(args.file):
-            # Single file provided
             if not any(args.file.lower().endswith(ext) for ext in supported_extensions):
                 logging.error(f"Unsupported file type. Please provide a PDF or EPUB file.")
                 exit(1)
             source_files = [args.file]
         elif os.path.isdir(args.file):
-            # Directory provided, find all PDF and EPUB files in it
             source_files = find_files(supported_extensions, args.file)
             if not source_files:
                 logging.error(f"No PDF or EPUB files found in the specified directory: {args.file}")
@@ -293,10 +292,10 @@ if __name__ == "__main__":
             logging.error(f"File or directory not found: {args.file}")
             exit(1)
     else:
-        # No file or folder specified, use current directory
-        source_files = find_files(supported_extensions)
+        default_dir = "books"
+        source_files = find_files(supported_extensions, default_dir)
         if not source_files:
-            logging.warning(f"No PDF or EPUB files found in the current directory with extensions: {supported_extensions}")
+            logging.warning(f"No PDF or EPUB files found in '{default_dir}/' with extensions: {supported_extensions}")
             exit(1)
         model = configure_genai()
         if not model:
@@ -309,8 +308,8 @@ if __name__ == "__main__":
             logging.info(f"Processing file {i + 1}/{total_files}: {source_file}")
 
             # Determine target filename for logging completion
-            base_name, _ = os.path.splitext(source_file)
-            target_output_filename = f"{base_name}_{LANGUAGE}.txt"
+            base_name = os.path.splitext(os.path.basename(source_file))[0]
+            target_output_filename = os.path.join("output", f"{base_name}_{LANGUAGE}.txt")
 
             # Check if target file already exists and ask user if they want to overwrite or skip
             if os.path.exists(target_output_filename):
