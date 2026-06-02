@@ -1,60 +1,86 @@
 # PDF Translator
 
-A Python tool to translate PDF and EPUB documents page by page or chapter by chapter. Translation is performed via the Google Gemini API (`google-generativeai`). The result is saved as a text file.
+Ein Python-Tool zum seitenweisen Übersetzen von PDF- und EPUB-Dokumenten via Google Gemini API. Die Übersetzung wird Seite für Seite als Textdatei gespeichert und kann jederzeit unterbrochen und fortgesetzt werden.
 
-## Features
-- Reads PDF or EPUB files from the current directory
-- Translates each page (PDF) or chapter (EPUB) into the desired language
-- Saves the translation in a new text file with the same base name as the original
-- Language and model are configurable (default: German, `gemini-1.5-flash-lite-preview-06-17`)
-- Extensive logging for each processing step
-- API key is read from the `API_KEY` environment variable
-- Supports range translation (e.g., only specific pages)
-- Shows the number of characters sent and received per page
+## Projektstruktur
 
-## Requirements
-- Python 3.8+
-- Virtual environment recommended
-- Install dependencies from `requirements.txt`:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+```
+books/              ← Quell-PDFs und EPUBs hier ablegen
+output/             ← Übersetzungen und Fortschrittsdateien
+src/                ← Python-Skripte
+translate_books.sh  ← Hauptskript: Bücher übersetzen
+run_visual.sh       ← Visueller Translator (Text + Bilder)
+create_pdf.sh       ← Markdown-Datei in PDF konvertieren
+install.sh          ← Ersteinrichtung der Umgebung
 ```
 
-## API Key
-Set your Google Gemini API key as an environment variable:
+## Shell-Skripte
+
+### `translate_books.sh` — Bücher übersetzen
+Das Hauptskript. Richtet das virtuelle Python-Environment automatisch ein, installiert alle Abhängigkeiten und startet die Übersetzung.
 
 ```bash
-export API_KEY=YOUR_API_KEY
+./translate_books.sh                        # alle Bücher in books/ übersetzen
+./translate_books.sh --file books/buch.pdf  # einzelnes Buch
+./translate_books.sh --lang english         # andere Zielsprache (Standard: deutsch)
+./translate_books.sh --range 10-50          # nur Seiten 10–50
 ```
 
-## Usage
-The main script is `translator.py`.
-
-```bash
-python3 translator.py
-```
-
-You will be prompted for language and page range if needed.
-
-### Example: Language and Range
-- Language: `de` (default) or e.g. `en` for English
-- Page range: `3-7` for pages 3 to 7, leave blank for all pages
-
-## Logging and Error Handling
-All steps are logged. Errors are displayed clearly.
-
-## Notes
-- The result file gets the same name as the original, with the language code before the extension (e.g., `myfile_de.txt`).
-- The model can be overridden via the `GOOGLE_LLM` environment variable.
-- The script also supports EPUB files.
-
-## License
-MIT
+Bei einem Neustart setzt das Skript automatisch an der zuletzt übersetzten Seite weiter (Fortschritt wird in `output/<buch>.progress.json` gespeichert).
 
 ---
 
-For feedback or feature requests, please get in touch.
+### `run_visual.sh` — Visueller Translator
+Übersetzt eine PDF-Datei mitsamt Bildern und erstellt eine Markdown-Datei mit eingebetteten Bildbeschreibungen. Sucht automatisch nach einer PDF-Datei im Projektverzeichnis.
+
+```bash
+./run_visual.sh
+```
+
+---
+
+### `create_pdf.sh` — Markdown zu PDF
+Konvertiert eine übersetzte Markdown-Datei (`*_visual_deutsch.md`) in ein PDF.
+
+```bash
+./create_pdf.sh output/buch_visual_deutsch.md
+./create_pdf.sh   # nimmt automatisch die neueste *_visual_deutsch.md
+```
+
+---
+
+### `install.sh` — Ersteinrichtung
+Installiert pip, erstellt das virtuelle Environment und installiert alle Abhängigkeiten. Nur einmalig nötig (bei normalem Gebrauch übernimmt `translate_books.sh` die Einrichtung automatisch).
+
+```bash
+./install.sh
+```
+
+---
+
+## Konfiguration
+
+**API Key** (erforderlich):
+```bash
+export GEMINI_API_KEY=DEIN_API_KEY
+```
+
+**Modell** (optional, Standard: `gemini-1.5-flash-lite-preview-06-17`):
+```bash
+export GEMINI_LLM=gemini-1.5-pro
+```
+
+## Auto-Resume
+
+Jede übersetzte Seite wird sofort in `output/<buch>.progress.json` gespeichert:
+```json
+{
+  "last_page": 42,
+  "total_pages": 300,
+  "language": "deutsch"
+}
+```
+Bei einem Neustart liest das Skript diese Datei und macht automatisch weiter.
+
+## Lizenz
+MIT
