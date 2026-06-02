@@ -14,10 +14,9 @@ source $VENV_DIR/bin/activate
 
 # 3. Abhängigkeiten installieren/aktualisieren
 if [ -f "requirements.txt" ]; then
-    # -qq unterdrückt die Ausgabe, wenn alles schon installiert ist
-    pip install -r requirements.txt
+    $VENV_DIR/bin/pip install -q -r requirements.txt
 fi
 
 # 4. Das Python-Programm starten
 echo "Starte Translator..."
-python3 translator.py "$@"
+$VENV_DIR/bin/python translator.py "$@"

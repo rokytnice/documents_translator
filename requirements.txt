@@ -1,5 +1,8 @@
 # requirements.txt
 
+# Anthropic Claude API (claude_translator.py)
+anthropic
+
 # For reading text content from PDF files
 pdfplumber
 
