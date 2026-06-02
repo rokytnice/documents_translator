@@ -1,38 +1,38 @@
 # PDF Translator
 
-Ein Python-Tool zum seitenweisen Übersetzen von PDF- und EPUB-Dokumenten via Google Gemini API. Die Übersetzung wird Seite für Seite als Textdatei gespeichert und kann jederzeit unterbrochen und fortgesetzt werden.
+A Python tool for translating PDF and EPUB documents page by page using the Google Gemini API. Translations are saved incrementally and can be interrupted and resumed at any time.
 
-## Projektstruktur
+## Project Structure
 
 ```
-books/                      ← Quell-PDFs und EPUBs hier ablegen
-output/                     ← Übersetzungen und Fortschrittsdateien
-src/                        ← Python-Skripte
+books/                      ← Place source PDFs and EPUBs here
+output/                     ← Translations and progress files
+src/                        ← Python scripts
 scripts/
-  translate_books.sh        ← Hauptskript: Bücher übersetzen
-  run_visual.sh             ← Visueller Translator (Text + Bilder)
-  create_pdf.sh             ← Markdown-Datei in PDF konvertieren
-  install.sh                ← Ersteinrichtung der Umgebung
+  translate_books.sh        ← Main script: translate books
+  run_visual.sh             ← Visual translator (text + images)
+  create_pdf.sh             ← Convert Markdown file to PDF
+  install.sh                ← Initial setup
 ```
 
-## Shell-Skripte
+## Shell Scripts
 
-### `translate_books.sh` — Bücher übersetzen
-Das Hauptskript. Richtet das virtuelle Python-Environment automatisch ein, installiert alle Abhängigkeiten und startet die Übersetzung.
+### `scripts/translate_books.sh` — Translate books
+The main script. Automatically sets up the virtual Python environment, installs all dependencies, and starts the translation.
 
 ```bash
-./scripts/translate_books.sh                        # alle Bücher in books/ übersetzen
-./scripts/translate_books.sh --file books/buch.pdf  # einzelnes Buch
-./scripts/translate_books.sh --lang english         # andere Zielsprache (Standard: deutsch)
-./scripts/translate_books.sh --range 10-50          # nur Seiten 10–50
+./scripts/translate_books.sh                          # translate all books in books/
+./scripts/translate_books.sh --file books/book.pdf    # single book
+./scripts/translate_books.sh --lang english           # different target language (default: deutsch)
+./scripts/translate_books.sh --range 10-50            # only pages 10–50
 ```
 
-Bei einem Neustart setzt das Skript automatisch an der zuletzt übersetzten Seite weiter (Fortschritt wird in `output/<buch>.progress.json` gespeichert).
+On restart, the script automatically continues from the last translated page (progress is saved in `output/<book>.progress.json`).
 
 ---
 
-### `run_visual.sh` — Visueller Translator
-Übersetzt eine PDF-Datei mitsamt Bildern und erstellt eine Markdown-Datei mit eingebetteten Bildbeschreibungen. Sucht automatisch nach einer PDF-Datei im Projektverzeichnis.
+### `scripts/run_visual.sh` — Visual translator
+Translates a PDF including images and creates a Markdown file with embedded image descriptions. Automatically searches for a PDF file in the project directory.
 
 ```bash
 ./scripts/run_visual.sh
@@ -40,18 +40,18 @@ Bei einem Neustart setzt das Skript automatisch an der zuletzt übersetzten Seit
 
 ---
 
-### `create_pdf.sh` — Markdown zu PDF
-Konvertiert eine übersetzte Markdown-Datei (`*_visual_deutsch.md`) in ein PDF.
+### `scripts/create_pdf.sh` — Markdown to PDF
+Converts a translated Markdown file (`*_visual_deutsch.md`) into a PDF.
 
 ```bash
-./scripts/create_pdf.sh output/buch_visual_deutsch.md
-./scripts/create_pdf.sh   # nimmt automatisch die neueste *_visual_deutsch.md
+./scripts/create_pdf.sh output/book_visual_deutsch.md
+./scripts/create_pdf.sh   # automatically picks the most recent *_visual_deutsch.md
 ```
 
 ---
 
-### `install.sh` — Ersteinrichtung
-Installiert pip, erstellt das virtuelle Environment und installiert alle Abhängigkeiten. Nur einmalig nötig (bei normalem Gebrauch übernimmt `translate_books.sh` die Einrichtung automatisch).
+### `scripts/install.sh` — Initial setup
+Installs pip, creates the virtual environment, and installs all dependencies. Only needed once (for normal use, `translate_books.sh` handles setup automatically).
 
 ```bash
 ./scripts/install.sh
@@ -59,21 +59,21 @@ Installiert pip, erstellt das virtuelle Environment und installiert alle Abhäng
 
 ---
 
-## Konfiguration
+## Configuration
 
-**API Key** (erforderlich):
+**API Key** (required):
 ```bash
-export GEMINI_API_KEY=DEIN_API_KEY
+export GEMINI_API_KEY=YOUR_API_KEY
 ```
 
-**Modell** (optional, Standard: `gemini-1.5-flash-lite-preview-06-17`):
+**Model** (optional, default: `gemini-1.5-flash-lite-preview-06-17`):
 ```bash
 export GEMINI_LLM=gemini-1.5-pro
 ```
 
 ## Auto-Resume
 
-Jede übersetzte Seite wird sofort in `output/<buch>.progress.json` gespeichert:
+After each translated page, progress is saved to `output/<book>.progress.json`:
 ```json
 {
   "last_page": 42,
@@ -81,7 +81,7 @@ Jede übersetzte Seite wird sofort in `output/<buch>.progress.json` gespeichert:
   "language": "deutsch"
 }
 ```
-Bei einem Neustart liest das Skript diese Datei und macht automatisch weiter.
+On restart, the script reads this file and continues automatically.
 
-## Lizenz
+## License
 MIT
