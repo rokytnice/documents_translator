@@ -1,5 +1,5 @@
 #!/bin/bash
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 sudo apt install pip
 python3 -m venv .venv
