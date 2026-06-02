@@ -9,3 +9,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 
 export API_KEY=***
+
+# Create required directories if they don't exist
+mkdir -p books output
+echo "Directories ready: books/ output/"
