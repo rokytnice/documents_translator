@@ -1,6 +1,6 @@
 #!/bin/bash
+cd "$(dirname "$0")/.."
 
-# Pfad zum Virtual Environment
 VENV_DIR=".venv"
 
 # 1. Prüfen ob venv existiert, wenn nicht erstellen

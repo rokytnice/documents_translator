@@ -5,13 +5,14 @@ Ein Python-Tool zum seitenweisen Übersetzen von PDF- und EPUB-Dokumenten via Go
 ## Projektstruktur
 
 ```
-books/              ← Quell-PDFs und EPUBs hier ablegen
-output/             ← Übersetzungen und Fortschrittsdateien
-src/                ← Python-Skripte
-translate_books.sh  ← Hauptskript: Bücher übersetzen
-run_visual.sh       ← Visueller Translator (Text + Bilder)
-create_pdf.sh       ← Markdown-Datei in PDF konvertieren
-install.sh          ← Ersteinrichtung der Umgebung
+books/                      ← Quell-PDFs und EPUBs hier ablegen
+output/                     ← Übersetzungen und Fortschrittsdateien
+src/                        ← Python-Skripte
+scripts/
+  translate_books.sh        ← Hauptskript: Bücher übersetzen
+  run_visual.sh             ← Visueller Translator (Text + Bilder)
+  create_pdf.sh             ← Markdown-Datei in PDF konvertieren
+  install.sh                ← Ersteinrichtung der Umgebung
 ```
 
 ## Shell-Skripte
@@ -20,10 +21,10 @@ install.sh          ← Ersteinrichtung der Umgebung
 Das Hauptskript. Richtet das virtuelle Python-Environment automatisch ein, installiert alle Abhängigkeiten und startet die Übersetzung.
 
 ```bash
-./translate_books.sh                        # alle Bücher in books/ übersetzen
-./translate_books.sh --file books/buch.pdf  # einzelnes Buch
-./translate_books.sh --lang english         # andere Zielsprache (Standard: deutsch)
-./translate_books.sh --range 10-50          # nur Seiten 10–50
+./scripts/translate_books.sh                        # alle Bücher in books/ übersetzen
+./scripts/translate_books.sh --file books/buch.pdf  # einzelnes Buch
+./scripts/translate_books.sh --lang english         # andere Zielsprache (Standard: deutsch)
+./scripts/translate_books.sh --range 10-50          # nur Seiten 10–50
 ```
 
 Bei einem Neustart setzt das Skript automatisch an der zuletzt übersetzten Seite weiter (Fortschritt wird in `output/<buch>.progress.json` gespeichert).
@@ -34,7 +35,7 @@ Bei einem Neustart setzt das Skript automatisch an der zuletzt übersetzten Seit
 Übersetzt eine PDF-Datei mitsamt Bildern und erstellt eine Markdown-Datei mit eingebetteten Bildbeschreibungen. Sucht automatisch nach einer PDF-Datei im Projektverzeichnis.
 
 ```bash
-./run_visual.sh
+./scripts/run_visual.sh
 ```
 
 ---
@@ -43,8 +44,8 @@ Bei einem Neustart setzt das Skript automatisch an der zuletzt übersetzten Seit
 Konvertiert eine übersetzte Markdown-Datei (`*_visual_deutsch.md`) in ein PDF.
 
 ```bash
-./create_pdf.sh output/buch_visual_deutsch.md
-./create_pdf.sh   # nimmt automatisch die neueste *_visual_deutsch.md
+./scripts/create_pdf.sh output/buch_visual_deutsch.md
+./scripts/create_pdf.sh   # nimmt automatisch die neueste *_visual_deutsch.md
 ```
 
 ---
@@ -53,7 +54,7 @@ Konvertiert eine übersetzte Markdown-Datei (`*_visual_deutsch.md`) in ein PDF.
 Installiert pip, erstellt das virtuelle Environment und installiert alle Abhängigkeiten. Nur einmalig nötig (bei normalem Gebrauch übernimmt `translate_books.sh` die Einrichtung automatisch).
 
 ```bash
-./install.sh
+./scripts/install.sh
 ```
 
 ---
