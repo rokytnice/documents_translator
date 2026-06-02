@@ -5,14 +5,14 @@ A Python tool for translating PDF and EPUB documents page by page using the Goog
 ## Project Structure
 
 ```
-books/                      ← Place source PDFs and EPUBs here
-output/                     ← Translations and progress files
-src/                        ← Python scripts
+books/                              ← Place source PDFs and EPUBs here
+output/                             ← Translations and progress files
+src/                                ← Python scripts
 scripts/
-  translate_books.sh        ← Main script: translate books
-  run_visual.sh             ← Visual translator (text + images)
-  create_pdf.sh             ← Convert Markdown file to PDF
-  install.sh                ← Initial setup
+  translate_books.sh                ← Main script: translate books
+  translate_books_with_images.sh    ← Visual translator (text + images)
+  convert_pdf_from_md.sh            ← Convert Markdown file to PDF
+  prepare_env.sh                    ← Initial setup
 ```
 
 ## Shell Scripts
@@ -31,30 +31,30 @@ On restart, the script automatically continues from the last translated page (pr
 
 ---
 
-### `scripts/run_visual.sh` — Visual translator
+### `scripts/translate_books_with_images.sh` — Visual translator
 Translates a PDF including images and creates a Markdown file with embedded image descriptions. Automatically searches for a PDF file in the project directory.
 
 ```bash
-./scripts/run_visual.sh
+./scripts/translate_books_with_images.sh
 ```
 
 ---
 
-### `scripts/create_pdf.sh` — Markdown to PDF
+### `scripts/convert_pdf_from_md.sh` — Markdown to PDF
 Converts a translated Markdown file (`*_visual_deutsch.md`) into a PDF.
 
 ```bash
-./scripts/create_pdf.sh output/book_visual_deutsch.md
-./scripts/create_pdf.sh   # automatically picks the most recent *_visual_deutsch.md
+./scripts/convert_pdf_from_md.sh output/book_visual_deutsch.md
+./scripts/convert_pdf_from_md.sh   # automatically picks the most recent *_visual_deutsch.md
 ```
 
 ---
 
-### `scripts/install.sh` — Initial setup
+### `scripts/prepare_env.sh` — Initial setup
 Installs pip, creates the virtual environment, and installs all dependencies. Only needed once (for normal use, `translate_books.sh` handles setup automatically).
 
 ```bash
-./scripts/install.sh
+./scripts/prepare_env.sh
 ```
 
 ---
