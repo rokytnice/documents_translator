@@ -2,28 +2,23 @@ import os
 import logging
 import time
 import re
+import sys
+
 import fitz  # PyMuPDF
-from google.generativeai import GenerativeModel, configure
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from claude_cli import ClaudeModel, ClaudeError  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 class VisualTranslator:
-    def __init__(self, api_key, model_name=None):
-        self.api_key = api_key
-        if not self.api_key:
-            logging.error("API Key missing.")
-            raise ValueError("API Key not found.")
-        
-        # Use env var or default
-        if not model_name:
-            model_name = os.getenv("GEMINI_LLM", "gemini-1.5-flash")
-            
-        configure(api_key=self.api_key)
-        self.model = GenerativeModel(model_name)
-        logging.info(f"VisualTranslator initialized with model: {model_name}")
+    def __init__(self, api_key=None, model_name=None):
+        """api_key bleibt aus Kompatibilität erhalten, wird nicht mehr gebraucht."""
+        self.model = ClaudeModel(model_name)
+        logging.info("VisualTranslator nutzt die Claude CLI.")
 
     def translate_text(self, text, target_language="deutsch", max_retries=5):
-        """Translates text using Gemini with strict output instructions and rate limit handling."""
+        """Übersetzt Text über die Claude CLI, mit strikter Ausgabevorgabe und Wiederholung."""
         if not text.strip():
             return ""
         
@@ -39,17 +34,15 @@ class VisualTranslator:
             try:
                 response = self.model.generate_content(prompt)
                 return response.text.strip()
-            except Exception as e:
-                error_str = str(e)
-                if "429" in error_str:
-                    wait_time = 10 * (attempt + 1)  # Progressive backoff: 10s, 20s, 30s...
-                    logging.warning(f"Rate limit hit (429). Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}...")
-                    time.sleep(wait_time)
-                else:
-                    logging.error(f"Translation error: {e}")
-                    return text  # Return original if non-recoverable error
-        
-        logging.error("Max retries exceeded for rate limit.")
+            except ClaudeError as e:
+                wait_time = 5 * (attempt + 1)
+                logging.warning(f"Model call failed ({e}). Retry {attempt + 1}/{max_retries} in {wait_time}s...")
+                time.sleep(wait_time)
+            except Exception as e:  # noqa: BLE001
+                logging.error(f"Translation error: {e}")
+                return text  # Return original if non-recoverable error
+
+        logging.error("Max retries exceeded.")
         return text
 
     def process_pdf(self, source_file, target_language="deutsch"):
@@ -110,13 +103,6 @@ class VisualTranslator:
 
 
 if __name__ == "__main__":
-    import sys
-    
-    API_KEY = os.getenv("GEMINI_API_KEY")
-    if not API_KEY:
-        print("Error: GEMINI_API_KEY environment variable not set.")
-        sys.exit(1)
-
     target_lang = "deutsch"
     
     # Simple argument parsing: python visual_translator.py <file> [lang]
@@ -126,7 +112,7 @@ if __name__ == "__main__":
         files = [f for f in os.listdir('.') if f.endswith('.pdf')]
         if files:
             print(f"No file specified. Using first found PDF: {files[0]}")
-            translator = VisualTranslator(API_KEY)
+            translator = VisualTranslator()
             translator.process_pdf(files[0], target_lang)
         else:
             sys.exit(1)
@@ -135,5 +121,5 @@ if __name__ == "__main__":
         if len(sys.argv) > 2:
             target_lang = sys.argv[2]
             
-        translator = VisualTranslator(API_KEY)
+        translator = VisualTranslator()
         translator.process_pdf(file_path, target_lang)

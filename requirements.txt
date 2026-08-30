@@ -6,8 +6,8 @@ anthropic
 # For reading text content from PDF files
 pdfplumber
 
-# For interacting with the Google Generative AI API (Gemini)
-google-generativeai
+# Der Modellzugriff läuft über die Claude Code CLI (`claude`), nicht über ein
+# Python-SDK — siehe src/claude_cli.py. Kein zusätzliches Paket nötig.
 
 ebooklib
 beautifulsoup4

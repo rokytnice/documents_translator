@@ -3,3 +3,13 @@
 books/
 output/
 *.progress.json
+
+# Arbeitsdaten und Zwischenstände — nie ins Repo (enthalten u. a. Transkripte
+# und Kursmaterial mit personenbezogenen bzw. fremden Inhalten)
+_work/
+_tmp/
+_reports/
+_bot_outputs/
+*.log
+__pycache__/
+*.pyc

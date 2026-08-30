@@ -1,6 +1,6 @@
 # PDF Translator
 
-A Python tool for translating PDF and EPUB documents page by page using the Google Gemini API. Translations are saved incrementally and can be interrupted and resumed at any time.
+A Python tool for translating PDF and EPUB documents page by page using the Claude Code CLI (`claude`). Translations are saved incrementally and can be interrupted and resumed at any time.
 
 ## Project Structure
 
@@ -63,12 +63,14 @@ Installs pip, creates the virtual environment, and installs all dependencies. On
 
 **API Key** (required):
 ```bash
-export GEMINI_API_KEY=YOUR_API_KEY
+# Kein API-Key nötig — der Zugriff läuft über die installierte Claude CLI.
+# Abweichender Pfad zur CLI (optional):
+export CLAUDE_CLI=/pfad/zu/claude
 ```
 
-**Model** (optional, default: `gemini-1.5-flash-lite-preview-06-17`):
+**Model** (optional, sonst das Standardmodell der CLI):
 ```bash
-export GEMINI_LLM=gemini-1.5-pro
+export CLAUDE_MODEL=claude-sonnet-5
 ```
 
 ## Auto-Resume

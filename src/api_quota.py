@@ -42,7 +42,7 @@ def check_api_quota(project_id, service_name):
 # Beispielaufruf
 if __name__ == "__main__":
     project_id = "391500694148"
-    service_name = "aiplatform.googleapis.com"  # Beispiel: Gemini API
+    service_name = "aiplatform.googleapis.com"  # Beispiel: Google-Cloud-Dienst
 
     has_quota = check_api_quota(project_id, service_name)
     if has_quota:
