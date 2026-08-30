@@ -6,8 +6,10 @@ anthropic
 # For reading text content from PDF files
 pdfplumber
 
-# Der Modellzugriff läuft über die Claude Code CLI (`claude`), nicht über ein
-# Python-SDK — siehe src/claude_cli.py. Kein zusätzliches Paket nötig.
+# Modellzugriff: standardmäßig über die Claude Code CLI (`claude`), dafür ist
+# kein Python-Paket nötig — siehe src/claude_cli.py.
+# Optional für --provider gemini (dann auch GEMINI_API_KEY setzen):
+# google-generativeai
 
 ebooklib
 beautifulsoup4

@@ -1,26 +1,28 @@
-"""Übersetzt SRT-Untertitel über die Claude CLI und lässt Timing unangetastet.
+"""Übersetzt SRT-Untertitel und lässt Nummern und Timecodes unangetastet.
 
 Nur die Textzeilen einer Cue gehen an das Modell; Index und Zeitstempel werden
 1:1 aus der Quelldatei übernommen. Die Cues werden in Batches als nummerierte
 Zeilen übergeben, damit die Zuordnung Cue -> Übersetzung erhalten bleibt.
 
-Aufruf des Modells über `claude -p` (Claude Code CLI) — keine Gemini-API mehr,
-damit das Tageskontingent des Free-Tiers keine Rolle mehr spielt.
+Der Modellzugriff läuft standardmäßig über die Claude Code CLI; mit
+`--provider gemini` alternativ über die Gemini-API (dort gilt das
+Tageskontingent des Free-Tiers).
 """
 
 import argparse
 import logging
 import os
 import re
-import subprocess
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import llm  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 TIME_RE = re.compile(r"^\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}")
 MARKER = "@@"
-CLI = os.getenv("CLAUDE_CLI", "claude")
 
 
 def parse_srt(text):
@@ -67,20 +69,7 @@ Zeilen:
 {payload}"""
 
 
-def ask_claude(prompt, timeout=600):
-    """Ruft die Claude CLI auf; Prompt kommt über stdin, Antwort als Text zurück."""
-    proc = subprocess.run(
-        [CLI, "-p", "--output-format", "text"],
-        input=prompt, capture_output=True, text=True, timeout=timeout,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"claude CLI Exit {proc.returncode}: {proc.stderr.strip()[:200]}"
-        )
-    return proc.stdout
-
-
-def translate_batch(chunks, max_retries=4):
+def translate_batch(model, chunks, max_retries=4):
     """chunks: Liste von Strings (je eine Cue, Zeilenumbrüche als \\n innerhalb)."""
     payload = "\n".join(
         f"{MARKER}{i}{MARKER} " + c.replace("\n", " ⏎ ") for i, c in enumerate(chunks)
@@ -89,7 +78,7 @@ def translate_batch(chunks, max_retries=4):
 
     for attempt in range(max_retries):
         try:
-            answer = ask_claude(prompt)
+            answer = model.generate_content(prompt).text
             got = {}
             for line in answer.split("\n"):
                 m = re.match(rf"\s*{MARKER}(\d+){MARKER}\s?(.*)$", line)
@@ -104,10 +93,9 @@ def translate_batch(chunks, max_retries=4):
                 "Antwort unvollständig (%d von %d Zeilen), Versuch %d",
                 len(got), len(chunks), attempt + 1,
             )
-        except subprocess.TimeoutExpired:
-            logging.warning("claude CLI Zeitüberschreitung, Versuch %d", attempt + 1)
-        except RuntimeError as exc:
-            logging.warning("%s, Versuch %d", exc, attempt + 1)
+        except llm.transient_errors() as exc:
+            logging.warning("Modellaufruf gescheitert: %s (Versuch %d)",
+                            exc, attempt + 1)
         time.sleep(3)
 
     if len(chunks) == 1:
@@ -115,16 +103,17 @@ def translate_batch(chunks, max_retries=4):
         raise RuntimeError(f"Cue nicht übersetzbar: {chunks[0][:60]!r}")
     half = len(chunks) // 2
     logging.info("Teile Batch (%d) und versuche erneut", len(chunks))
-    return translate_batch(chunks[:half]) + translate_batch(chunks[half:])
+    return (translate_batch(model, chunks[:half])
+            + translate_batch(model, chunks[half:]))
 
 
-def translate_file(src, dst, batch_size=40):
+def translate_file(model, src, dst, batch_size=40):
     with open(src, encoding="utf-8-sig", errors="replace") as fh:
         cues = parse_srt(fh.read())
     texts = ["\n".join(c[2]) for c in cues]
     result = []
     for start in range(0, len(texts), batch_size):
-        result.extend(translate_batch(texts[start:start + batch_size]))
+        result.extend(translate_batch(model, texts[start:start + batch_size]))
         logging.info("%s: %d/%d Cues", os.path.basename(src), len(result), len(texts))
     assert len(result) == len(cues), f"{src}: {len(result)} != {len(cues)}"
     with open(dst, "w", encoding="utf-8") as fh:
@@ -137,16 +126,21 @@ def main():
     ap.add_argument("files", nargs="+")
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--batch-size", type=int, default=40)
+    ap.add_argument("--model", default=None,
+                    help="Modellname beim gewählten Anbieter")
+    llm.add_provider_argument(ap)
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
+    model = llm.get_model(args.model, args.provider)
+    logging.info("Anbieter: %s", llm.resolve(args.provider))
     for path in args.files:
         name = os.path.basename(path)
         out = os.path.join(args.outdir, re.sub(r"-en\.srt$", "-de.srt", name))
         if os.path.exists(out) and os.path.getsize(out) > 0:
             logging.info("überspringe %s (existiert)", os.path.basename(out))
             continue
-        n = translate_file(path, out, args.batch_size)
+        n = translate_file(model, path, out, args.batch_size)
         logging.info("fertig: %s (%d Cues)", os.path.basename(out), n)
 
 

@@ -45,3 +45,26 @@ sondern die Claude Code CLI (`claude -p --output-format text`, Prompt über stdi
 Damit entfällt die Tagesgrenze des Gemini-Free-Tiers. Batchgröße auf 40 Cues
 gesenkt; schlägt ein einzelner Cue mehrfach fehl, bricht der Lauf ab, statt
 englischen Text durchzureichen.
+
+## Modellanbieter: Claude CLI (Standard) oder Gemini
+
+`src/llm.py` ist die Auswahlschicht. Beide Anbieter bieten dieselbe Aufrufform
+`model.generate_content(prompt).text`, sodass die Module nichts vom Anbieter
+wissen müssen:
+
+- `src/claude_cli.py` — `claude -p --output-format text`, Prompt über stdin.
+  Kein API-Key, kein Tageskontingent.
+- `src/gemini_api.py` — Gemini-API. Das SDK wird erst beim Erzeugen des Modells
+  importiert, muss also nur installiert sein, wenn man den Pfad nutzt.
+
+Reihenfolge der Auswahl: `--provider` → `LLM_PROVIDER` → `claude`.
+
+    python src/translator.py --file buch.pdf                    # Claude CLI
+    python src/translator.py --file buch.pdf --provider gemini   # Gemini
+    LLM_PROVIDER=gemini python src/interpreter.py --file buch.pdf
+
+Modellname je Anbieter über `--model`, sonst `CLAUDE_MODEL` bzw. `GEMINI_LLM`.
+
+**Gotcha:** Das Gemini-Tageskontingent (Free-Tier, 20 Anfragen pro Modell und
+Tag) meldet sich als 429 mit `PerDay` im Text. `gemini_api.py` wirft dann sofort
+`QuotaExhausted`, statt zu warten — Warten hilft bis Mitternacht Pacific nicht.

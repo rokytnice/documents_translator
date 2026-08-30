@@ -4,7 +4,7 @@ import pdfplumber
 import textwrap
 import time
 import logging
-from claude_cli import ClaudeModel, ClaudeError
+import llm
 from ebooklib import epub, ITEM_DOCUMENT  # Added for EPUB
 from bs4 import BeautifulSoup  # Added for parsing EPUB HTML content
 
@@ -17,13 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 LANGUAGE = "deutsch"  # Default language, can be overridden by user input
 
 
-def configure_genai():
-    """Stellt das Modell über die Claude CLI bereit."""
-    try:
-        return ClaudeModel()
-    except ClaudeError as exc:
-        logging.error("%s", exc)
-        return None
+def configure_genai(provider=None, model_name=None):
+    """Stellt das Modell bereit — Claude CLI (Standard) oder Gemini."""
+    return llm.model_or_none(model_name, provider)
 
 
 def get_translation_with_genai(model, content, max_retries=3):
@@ -42,7 +38,7 @@ def get_translation_with_genai(model, content, max_retries=3):
         try:
             response_text = model.generate_content(prompt).text
             return response_text, len(content), len(response_text)
-        except ClaudeError as exc:
+        except llm.transient_errors() as exc:
             logging.warning("Model call failed (attempt %d/%d): %s",
                             attempt + 1, max_retries, exc)
             time.sleep(5 * (attempt + 1))
@@ -239,6 +235,9 @@ if __name__ == "__main__":
                       help='Path to a specific file or folder containing PDF/EPUB files to translate')
     parser.add_argument('--lang', type=str, default=LANGUAGE, 
                       help=f'Target language (e.g., "deutsch" for German, default: "{LANGUAGE}")')
+    llm.add_provider_argument(parser)
+    parser.add_argument('--model', type=str, default=None,
+                        help='Modellname beim gewählten Anbieter')
     parser.add_argument('--range', type=str, default='',
                       help='Page/item range (e.g., "1-3", "5", or leave blank for all)')
     
@@ -299,7 +298,7 @@ if __name__ == "__main__":
         if not source_files:
             logging.warning(f"No PDF or EPUB files found in '{default_dir}/' with extensions: {supported_extensions}")
             exit(1)
-        model = configure_genai()
+        model = configure_genai(args.provider, args.model)
         if not model:
             exit(1)  # API key or model configuration failed
 

@@ -7,15 +7,15 @@ import sys
 import fitz  # PyMuPDF
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from claude_cli import ClaudeModel, ClaudeError  # noqa: E402
+import llm  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 class VisualTranslator:
-    def __init__(self, api_key=None, model_name=None):
-        """api_key bleibt aus Kompatibilität erhalten, wird nicht mehr gebraucht."""
-        self.model = ClaudeModel(model_name)
-        logging.info("VisualTranslator nutzt die Claude CLI.")
+    def __init__(self, api_key=None, model_name=None, provider=None):
+        """api_key bleibt aus Kompatibilität erhalten; Gemini holt ihn selbst."""
+        self.model = llm.get_model(model_name, provider)
+        logging.info("VisualTranslator nutzt Anbieter: %s", llm.resolve(provider))
 
     def translate_text(self, text, target_language="deutsch", max_retries=5):
         """Übersetzt Text über die Claude CLI, mit strikter Ausgabevorgabe und Wiederholung."""
@@ -34,7 +34,7 @@ class VisualTranslator:
             try:
                 response = self.model.generate_content(prompt)
                 return response.text.strip()
-            except ClaudeError as e:
+            except llm.transient_errors() as e:
                 wait_time = 5 * (attempt + 1)
                 logging.warning(f"Model call failed ({e}). Retry {attempt + 1}/{max_retries} in {wait_time}s...")
                 time.sleep(wait_time)
@@ -103,23 +103,26 @@ class VisualTranslator:
 
 
 if __name__ == "__main__":
-    target_lang = "deutsch"
-    
-    # Simple argument parsing: python visual_translator.py <file> [lang]
-    if len(sys.argv) < 2:
-        print("Usage: python visual_translator.py <pdf_file> [target_language]")
-        # Default fallback for testing if file exists
-        files = [f for f in os.listdir('.') if f.endswith('.pdf')]
-        if files:
-            print(f"No file specified. Using first found PDF: {files[0]}")
-            translator = VisualTranslator()
-            translator.process_pdf(files[0], target_lang)
-        else:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="PDF seitenweise übersetzen, Bilder in Markdown einbetten")
+    parser.add_argument("pdf_file", nargs="?", help="Quell-PDF")
+    parser.add_argument("language", nargs="?", default="deutsch",
+                        help="Zielsprache (Standard: deutsch)")
+    parser.add_argument("--model", default=None,
+                        help="Modellname beim gewählten Anbieter")
+    llm.add_provider_argument(parser)
+    args = parser.parse_args()
+
+    source = args.pdf_file
+    if not source:
+        candidates = [f for f in os.listdir(".") if f.endswith(".pdf")]
+        if not candidates:
+            print("Kein PDF angegeben und keines im Verzeichnis gefunden.")
             sys.exit(1)
-    else:
-        file_path = sys.argv[1]
-        if len(sys.argv) > 2:
-            target_lang = sys.argv[2]
-            
-        translator = VisualTranslator()
-        translator.process_pdf(file_path, target_lang)
+        source = candidates[0]
+        print(f"Kein PDF angegeben. Verwende: {source}")
+
+    translator = VisualTranslator(model_name=args.model, provider=args.provider)
+    translator.process_pdf(source, args.language)

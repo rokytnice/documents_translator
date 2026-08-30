@@ -56,7 +56,7 @@ import time
 import pdfplumber
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from claude_cli import ClaudeModel, ClaudeError  # noqa: E402
+import llm  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -82,13 +82,9 @@ DRIFT_METRICS_REQUIRED = 2
 # Model access
 # --------------------------------------------------------------------------- #
 
-def configure_genai(model_name=None):
-    """Stellt das Modell über die Claude CLI bereit."""
-    try:
-        return ClaudeModel(model_name or DEFAULT_MODEL)
-    except ClaudeError as exc:
-        logging.error("%s", exc)
-        return None
+def configure_genai(model_name=None, provider=None):
+    """Stellt das Modell bereit — Claude CLI (Standard) oder Gemini."""
+    return llm.model_or_none(model_name or DEFAULT_MODEL, provider)
 
 
 """Timestamp of the last model call, shared by every subagent in the process."""
@@ -121,7 +117,7 @@ def call_model(model, prompt, as_json=False, max_retries=4, temperature=0.7):
         try:
             return model.generate_content(
                 prompt, generation_config=generation_config).text
-        except ClaudeError as exc:
+        except llm.transient_errors() as exc:
             delay = 5 * (attempt + 1)
             logging.warning("Modellaufruf gescheitert (Versuch %d/%d): %s — warte %ds",
                             attempt + 1, max_retries, exc, delay)
@@ -902,7 +898,7 @@ class Workspace:
 # --------------------------------------------------------------------------- #
 
 def orchestrate(source_file, style_file, page_range, output_dir, model_name, force,
-                merge_only, economy=False):
+                merge_only, economy=False, provider=None):
     workspace = Workspace(source_file, output_dir)
     if force:
         workspace.reset()
@@ -915,7 +911,7 @@ def orchestrate(source_file, style_file, page_range, output_dir, model_name, for
     with open(os.path.join(STYLE_DIR, style_file), "r", encoding="utf-8") as handle:
         style_text = handle.read()
 
-    model = configure_genai(model_name)
+    model = configure_genai(model_name, provider)
     if not model:
         return 1
 
@@ -1054,7 +1050,9 @@ if __name__ == "__main__":
     parser.add_argument("--style", default=DEFAULT_STYLE, help=f"Style bible in {STYLE_DIR}/")
     parser.add_argument("--range", default="", help='Page range, e.g. "40-120" or "57"')
     parser.add_argument("--output", default="output", help="Output directory")
-    parser.add_argument("--model", default=None, help="Override the Claude model (z. B. claude-sonnet-5)")
+    parser.add_argument("--model", default=None,
+                        help="Modellname beim gewählten Anbieter")
+    llm.add_provider_argument(parser)
     parser.add_argument("--force", action="store_true", help="Discard a previous run and restart")
     parser.add_argument("--merge", action="store_true",
                         help="Only merge existing page artifacts into the final Markdown")
@@ -1063,4 +1061,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     sys.exit(orchestrate(args.file, args.style, parse_range(args.range),
-                         args.output, args.model, args.force, args.merge, args.economy))
+                         args.output, args.model, args.force, args.merge,
+                         args.economy, args.provider))
