@@ -233,7 +233,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Translate documents using the Claude CLI')
     parser.add_argument('--file', type=str, 
                       help='Path to a specific file or folder containing PDF/EPUB files to translate')
-    parser.add_argument('--lang', type=str, default=LANGUAGE, 
+    parser.add_argument('--lang', type=str, default=None, 
                       help=f'Target language (e.g., "deutsch" for German, default: "{LANGUAGE}")')
     llm.add_provider_argument(parser)
     parser.add_argument('--model', type=str, default=None,
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Set language from command line or prompt
-    if args.lang != LANGUAGE:
+    if args.lang:
         LANGUAGE = args.lang.lower()
     else:
         user_lang_input = input(f"Enter the target language (e.g., 'deutsch' for German, default: '{LANGUAGE}'): ").strip()
@@ -298,73 +298,73 @@ if __name__ == "__main__":
         if not source_files:
             logging.warning(f"No PDF or EPUB files found in '{default_dir}/' with extensions: {supported_extensions}")
             exit(1)
-        model = configure_genai(args.provider, args.model)
-        if not model:
-            exit(1)  # API key or model configuration failed
+    model = configure_genai(args.provider, args.model)
+    if not model:
+        exit(1)  # API key or model configuration failed
 
-        total_files = len(source_files)
-        logging.info(f"Found {total_files} file(s) to process: {source_files}")
+    total_files = len(source_files)
+    logging.info(f"Found {total_files} file(s) to process: {source_files}")
 
-        for i, source_file in enumerate(source_files):
-            logging.info(f"Processing file {i + 1}/{total_files}: {source_file}")
+    for i, source_file in enumerate(source_files):
+        logging.info(f"Processing file {i + 1}/{total_files}: {source_file}")
 
-            # Determine target filename for logging completion
-            base_name = os.path.splitext(os.path.basename(source_file))[0]
-            target_output_filename = os.path.join("output", f"{base_name}_{LANGUAGE}.txt")
+        # Determine target filename for logging completion
+        base_name = os.path.splitext(os.path.basename(source_file))[0]
+        target_output_filename = os.path.join("output", f"{base_name}_{LANGUAGE}.txt")
 
-            # Auto-resume via progress file
-            resume_from = load_progress(target_output_filename)
-            file_start_item = max(start_processing_item, resume_from + 1)
-            if resume_from > 0:
-                logging.info(f"Resuming '{source_file}' from page {file_start_item} (last completed: {resume_from})")
+        # Auto-resume via progress file
+        resume_from = load_progress(target_output_filename)
+        file_start_item = max(start_processing_item, resume_from + 1)
+        if resume_from > 0:
+            logging.info(f"Resuming '{source_file}' from page {file_start_item} (last completed: {resume_from})")
 
-            last_request_time = 0
+        last_request_time = 0
 
-            with create_target_document_stream(source_file, LANGUAGE) as target_stream:
-                page_iterator = None
-                file_type_processed = ""
+        with create_target_document_stream(source_file, LANGUAGE) as target_stream:
+            page_iterator = None
+            file_type_processed = ""
 
-                if source_file.lower().endswith('.pdf'):
-                    page_iterator = read_pdf_pages(source_file, file_start_item, end_processing_item)
-                    file_type_processed = "PDF"
-                elif source_file.lower().endswith('.epub'):
-                    page_iterator = read_epub_pages(source_file, file_start_item, end_processing_item)
-                    file_type_processed = "EPUB"
+            if source_file.lower().endswith('.pdf'):
+                page_iterator = read_pdf_pages(source_file, file_start_item, end_processing_item)
+                file_type_processed = "PDF"
+            elif source_file.lower().endswith('.epub'):
+                page_iterator = read_epub_pages(source_file, file_start_item, end_processing_item)
+                file_type_processed = "EPUB"
 
-                if not page_iterator:
-                    logging.warning(f"Could not create a page/item iterator for {source_file}. Skipping.")
+            if not page_iterator:
+                logging.warning(f"Could not create a page/item iterator for {source_file}. Skipping.")
+                continue
+
+            logging.info(f"Starting translation for {file_type_processed} file: {source_file}")
+            processed_item_count = 0
+            for item_number, item_text in page_iterator:
+                if not item_text.strip():  # Double check if iterator yielded empty text
+                    logging.warning(
+                        f"Item {item_number} from {source_file} has empty text after iterator. Skipping.")
                     continue
 
-                logging.info(f"Starting translation for {file_type_processed} file: {source_file}")
-                processed_item_count = 0
-                for item_number, item_text in page_iterator:
-                    if not item_text.strip():  # Double check if iterator yielded empty text
-                        logging.warning(
-                            f"Item {item_number} from {source_file} has empty text after iterator. Skipping.")
-                        continue
+                throttle_request(last_request_time)
+                last_request_time = time.time()
 
-                    throttle_request(last_request_time)
-                    last_request_time = time.time()
+                translated_text, original_chars, translated_chars = get_translation_with_genai(model, item_text)
 
-                    translated_text, original_chars, translated_chars = get_translation_with_genai(model, item_text)
+                if "Error in translation." in translated_text and translated_chars == 0:
+                    logging.error(f"Failed to translate item {item_number} from {source_file}.")
+                else:
+                    logging.info(
+                        "Item %d (%s): Original characters: %d, Translated characters: %d",
+                        item_number, file_type_processed, original_chars, translated_chars
+                    )
+                    write_page_to_document(target_stream, item_number, translated_text)
+                    target_stream.flush()
+                    save_progress(target_output_filename, item_number, end_processing_item or 0, LANGUAGE)
+                    processed_item_count += 1
 
-                    if "Error in translation." in translated_text and translated_chars == 0:
-                        logging.error(f"Failed to translate item {item_number} from {source_file}.")
-                    else:
-                        logging.info(
-                            "Item %d (%s): Original characters: %d, Translated characters: %d",
-                            item_number, file_type_processed, original_chars, translated_chars
-                        )
-                        write_page_to_document(target_stream, item_number, translated_text)
-                        target_stream.flush()
-                        save_progress(target_output_filename, item_number, end_processing_item or 0, LANGUAGE)
-                        processed_item_count += 1
+            if processed_item_count == 0:
+                logging.warning(
+                    f"No items were processed for {source_file} within the specified range or due to empty content.")
 
-                if processed_item_count == 0:
-                    logging.warning(
-                        f"No items were processed for {source_file} within the specified range or due to empty content.")
+        logging.info(
+            f"Translation processing completed for {source_file}. Results saved in: {target_output_filename}")
 
-            logging.info(
-                f"Translation processing completed for {source_file}. Results saved in: {target_output_filename}")
-
-        logging.info("All files processed.")
+    logging.info("All files processed.")

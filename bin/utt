@@ -1,0 +1,125 @@
+#!/bin/bash
+# utt — Universal Text Translator. Hilfe: utt --help
+set -u
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(dirname "$(dirname "$SELF")")"
+VENV="$ROOT/.venv"
+PY="$VENV/bin/python"
+VERSION="1.0.0"
+
+usage() {
+cat <<'HELP'
+utt — Universal Text Translator (Version 1.0.0)
+
+Übersetzt PDF-/EPUB-Bücher seitenweise mit der Claude CLI (Standard) oder Gemini.
+Läuft aus jedem Verzeichnis; Ergebnisse landen im aktuellen Verzeichnis unter ./output/.
+
+VERWENDUNG
+  utt <befehl> [optionen]
+  utt --help | -h | help [befehl]
+  utt --version
+
+BEFEHLE
+  translate, t   Bücher übersetzen (PDF/EPUB -> output/<buch>_<sprache>.txt)
+  interpret, i   Historischen Text modern neu erzählen (Stil aus style/)
+  audiobook, a   Kapitelweises Hörbuch (MP3) mit Piper TTS erzeugen
+  pdf, p         Markdown-Datei in PDF umwandeln
+  setup          Python-Umgebung (.venv) anlegen bzw. aktualisieren
+  doctor         Installation prüfen (Python, venv, claude, ffmpeg, piper)
+
+BEISPIELE
+  utt translate --file buch.pdf                    # nach Deutsch, ganzes Buch
+  utt translate --file buch.pdf --lang english     # andere Zielsprache
+  utt translate --file buch.pdf --range 10-50      # nur Seiten 10-50
+  utt translate --file ~/books/                    # alle PDFs/EPUBs im Ordner
+  utt translate                                    # alle Bücher aus ./books/
+  utt translate --provider gemini --file buch.pdf  # Gemini statt Claude
+  utt interpret --file buch.pdf --range 40-80
+  utt audiobook --file output/ilias_interpretation.md --voice de_DE-eva_k-x_low
+  utt pdf output/buch_visual_deutsch.md
+
+TRANSLATE-OPTIONEN
+  --file PFAD        PDF/EPUB-Datei oder Ordner (Standard: ./books/)
+  --lang SPRACHE     Zielsprache (Standard: deutsch)
+  --range VON-BIS    Seitenbereich, z. B. 10-50 oder 7 (Standard: alle)
+  --provider NAME    claude (Standard) oder gemini
+  --model NAME       Modellname beim Anbieter
+
+FORTSETZEN
+  Nach jeder Seite wird output/<buch>.progress.json gespeichert. Ein Abbruch
+  (Strg+C) ist unkritisch: derselbe Befehl setzt hinter der letzten Seite fort.
+
+UMGEBUNGSVARIABLEN
+  CLAUDE_CLI      Pfad zur claude-Binary (Standard: claude im PATH)
+  CLAUDE_MODEL    Modell für die Claude CLI
+  LLM_PROVIDER    claude | gemini (Standard-Anbieter)
+  GEMINI_API_KEY  nur für --provider gemini (Free-Tier: 20 Anfragen/Modell/Tag)
+  PIPER_BIN       Pfad zu piper (Standard: ~/.local/bin/piper)
+
+Optionen eines Befehls anzeigen: utt <befehl> --help
+Installation: <projekt>/install.sh   Entfernen: <projekt>/install.sh --uninstall
+HELP
+}
+
+ensure_venv() {
+  if [ ! -x "$PY" ]; then
+    echo "utt: erstelle Python-Umgebung in $VENV ..." >&2
+    python3 -m venv "$VENV" || { echo "utt: venv fehlgeschlagen" >&2; exit 1; }
+    "$PY" -m pip install -q --upgrade pip
+    "$PY" -m pip install -q -r "$ROOT/requirements.txt" || exit 1
+  fi
+}
+
+need_claude() {
+  command -v "${CLAUDE_CLI:-claude}" >/dev/null 2>&1 || {
+    echo "utt: Claude CLI nicht gefunden (CLAUDE_CLI setzen oder installieren)." >&2; exit 1; }
+}
+
+cmd="${1:-}"
+[ $# -gt 0 ] && shift
+
+case "$cmd" in
+  ""|-h|--help) usage ;;
+  help)
+    if [ $# -gt 0 ]; then exec "$0" "$1" --help; else usage; fi ;;
+  -V|--version|version) echo "utt $VERSION" ;;
+  setup) rm -rf "$VENV"; ensure_venv; echo "utt: Umgebung bereit." ;;
+  translate|t)
+    ensure_venv
+    # Ohne --lang/--range würde das Skript interaktiv nachfragen
+    has_lang=0; has_range=0
+    for a in "$@"; do
+      case "$a" in --lang|--lang=*) has_lang=1 ;; --range|--range=*) has_range=1 ;; esac
+    done
+    extra=()
+    [ $has_lang -eq 0 ] && extra+=(--lang deutsch)
+    [ $has_range -eq 0 ] && extra+=(--range all)
+    case "${LLM_PROVIDER:-claude}" in claude) need_claude ;; esac
+    exec "$PY" "$ROOT/src/translator.py" "${extra[@]}" "$@" ;;
+  interpret|i)
+    ensure_venv; need_claude
+    exec "$PY" "$ROOT/src/interpreter.py" "$@" ;;
+  audiobook|a)
+    ensure_venv
+    PIPER_BIN="${PIPER_BIN:-$HOME/.local/bin/piper}"
+    [ -x "$PIPER_BIN" ] || { echo "utt: piper fehlt ($PIPER_BIN). Installation: pip install piper-tts" >&2; exit 1; }
+    command -v ffmpeg >/dev/null || { echo "utt: ffmpeg fehlt." >&2; exit 1; }
+    export PIPER_BIN
+    exec "$PY" "$ROOT/src/audiobook.py" "$@" ;;
+  pdf|p)
+    ensure_venv
+    case "${1:-}" in -h|--help) echo "Verwendung: utt pdf <datei.md>   (ohne Argument: neueste *_visual_deutsch.md im aktuellen Ordner)"; exit 0 ;; esac
+    f="${1:-$(ls -t ./*_visual_deutsch.md output/*_visual_deutsch.md 2>/dev/null | head -n1)}"
+    [ -n "$f" ] || { echo "utt: keine Markdown-Datei angegeben/gefunden." >&2; exit 1; }
+    exec "$PY" "$ROOT/src/md_to_pdf.py" "$f" ;;
+  doctor)
+    ok() { printf '  %-14s %s\n' "$1" "$2"; }
+    ok projekt "$ROOT"
+    ok python "$(python3 --version 2>&1)"
+    [ -x "$PY" ] && ok venv ok || ok venv "fehlt (utt setup)"
+    command -v "${CLAUDE_CLI:-claude}" >/dev/null && ok claude "$(command -v "${CLAUDE_CLI:-claude}")" || ok claude FEHLT
+    command -v ffmpeg >/dev/null && ok ffmpeg ok || ok ffmpeg "fehlt (nur audiobook)"
+    [ -x "${PIPER_BIN:-$HOME/.local/bin/piper}" ] && ok piper ok || ok piper "fehlt (nur audiobook)" ;;
+  *) echo "utt: unbekannter Befehl '$cmd'. Siehe: utt --help" >&2; exit 2 ;;
+esac

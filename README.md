@@ -2,6 +2,15 @@
 
 A Python tool for translating PDF and EPUB documents page by page. The model is reached through the Claude Code CLI (`claude`) by default; the Gemini API can be selected with `--provider gemini`. Translations are saved incrementally and can be interrupted and resumed at any time.
 
+## Global command `utt`
+
+```bash
+./install.sh              # links ~/.local/bin/utt, sets up .venv (uninstall: --uninstall)
+utt --help                # usage; `utt <command> --help` for details
+utt translate --file book.pdf --lang english --range 10-50
+```
+Commands: `translate`, `interpret`, `audiobook`, `pdf`, `setup`, `doctor`. Runs from any directory; results go to `./output/`.
+
 ## Project Structure
 
 ```

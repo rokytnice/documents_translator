@@ -61,7 +61,7 @@ import llm  # noqa: E402
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 DEFAULT_MODEL = os.getenv("CLAUDE_MODEL")
-STYLE_DIR = "style"
+STYLE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "style")
 DEFAULT_STYLE = "follett_style.md"
 
 # A page needs at least this many letters to be considered narrative content.
